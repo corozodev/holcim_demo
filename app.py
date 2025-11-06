@@ -24,6 +24,7 @@ if not hasattr(np, 'bool_'):
 warnings.filterwarnings("ignore")
 plt.style.use('seaborn-v0_8')
 sns.set_palette("Set2")
+st.set_page_config(page_title="Industrial Forecasting", page_icon="📊", layout="wide")
 
 # ============================================================
 # 📥 Load data
