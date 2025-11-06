@@ -9,7 +9,7 @@ from xgboost import XGBRegressor
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Dense
 from tensorflow.keras.optimizers import Adam
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, classification_report, confusion_matrix
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, confusion_matrix
 from sklearn.preprocessing import StandardScaler
 import warnings
 
@@ -24,9 +24,17 @@ if not hasattr(np, 'bool_'):
 warnings.filterwarnings("ignore")
 plt.style.use('seaborn-v0_8')
 sns.set_palette("Set2")
-st.set_page_config(page_title="Holcim BI Predictive Demo", layout="wide")
+
 # ============================================================
-# 📥 Load data
+# ⚙️ CONFIGURACIÓN STREAMLIT
+# ============================================================
+st.set_page_config(page_title="Holcim BI Predictive Demo", layout="wide")
+
+st.title("🏗️ Holcim BI Predictive Models Showcase")
+st.markdown("Demostración de tres modelos de predicción y análisis industrial usando datos sintéticos representativos de operaciones cementeras.")
+
+# ============================================================
+# 📥 CARGA DE DATOS
 # ============================================================
 @st.cache_data
 def load_data():
@@ -42,30 +50,39 @@ def load_data():
 cement_demand, cement_real, plant_energy, plant_real, plant_sensors, plant_sensors_real = load_data()
 
 # ============================================================
-# 🧱 Streamlit layout
+# 🧱 INTERFAZ PRINCIPAL
 # ============================================================
-
-st.title("🏗️ Holcim BI Predictive Models Showcase")
-st.markdown("Demostración de tres modelos de predicción y análisis industrial usando datos sintéticos representativos de operaciones cementeras.")
-
-tabs = st.tabs(["📈 Cement Demand (Prophet)", "⚙️ Plant Energy (XGBoost)", "🧠 Sensor Anomalies (Autoencoder)"])
+tabs = st.tabs([
+    "📈 Cement Demand (Prophet)",
+    "⚙️ Plant Energy (XGBoost)",
+    "🧠 Sensor Anomalies (Autoencoder)"
+])
 
 # ============================================================
-# 1️⃣ Prophet - Cement Demand
+# 1️⃣ PROPHET — CEMENT DEMAND
 # ============================================================
+@st.cache_resource
+def train_prophet(df_train):
+    model = Prophet(seasonality_mode='additive', yearly_seasonality=True)
+    model.fit(df_train)
+    return model
+
+@st.cache_data
+def forecast_prophet(model, df_test):
+    future = model.make_future_dataframe(periods=len(df_test), freq='MS')
+    forecast = model.predict(future)
+    pred_future = forecast.tail(len(df_test))[['ds', 'yhat']].reset_index(drop=True)
+    merged = pd.merge(df_test, pred_future, on='ds')
+    return merged, pred_future
+
 with tabs[0]:
     st.subheader("📈 Cement Demand Forecast")
 
-    df_train = cement_demand.groupby('date')['demand_tons'].sum().reset_index().rename(columns={'date':'ds','demand_tons':'y'})
-    df_test = cement_real.groupby('date')['demand_tons'].sum().reset_index().rename(columns={'date':'ds','demand_tons':'y'})
+    df_train = cement_demand.groupby('date')['demand_tons'].sum().reset_index().rename(columns={'date': 'ds', 'demand_tons': 'y'})
+    df_test = cement_real.groupby('date')['demand_tons'].sum().reset_index().rename(columns={'date': 'ds', 'demand_tons': 'y'})
 
-    model = Prophet(seasonality_mode='additive', yearly_seasonality=True)
-    model.fit(df_train)
-
-    future = model.make_future_dataframe(periods=len(df_test), freq='MS')
-    forecast = model.predict(future)
-    pred_future = forecast.tail(len(df_test))[['ds','yhat']].reset_index(drop=True)
-    merged = pd.merge(df_test, pred_future, on='ds')
+    model = train_prophet(df_train)
+    merged, pred_future = forecast_prophet(model, df_test)
 
     mae = mean_absolute_error(merged['y'], merged['yhat'])
     rmse = np.sqrt(mean_squared_error(merged['y'], merged['yhat']))
@@ -73,7 +90,7 @@ with tabs[0]:
 
     st.markdown(f"**MAE:** {mae:.2f} | **RMSE:** {rmse:.2f} | **R²:** {r2:.3f}")
 
-    fig, ax = plt.subplots(figsize=(8,4))
+    fig, ax = plt.subplots(figsize=(8, 4))
     ax.plot(df_train['ds'], df_train['y'], label='Train')
     ax.plot(df_test['ds'], df_test['y'], label='Real Future', color='green')
     ax.plot(pred_future['ds'], pred_future['yhat'], label='Forecast', color='orange')
@@ -81,25 +98,11 @@ with tabs[0]:
     ax.legend()
     st.pyplot(fig)
 
-
 # ============================================================
-# 2️⃣ XGBoost - Plant Energy Regression
+# 2️⃣ XGBOOST — PLANT ENERGY REGRESSION
 # ============================================================
-with tabs[1]:
-    st.subheader("⚙️ Plant Energy Prediction")
-
-    feature_cols = ['production_tons','kiln_temperature','humidity_pct','maintenance']
-    target_col = 'energy_mwh'
-
-    X_train = plant_energy[feature_cols]
-    y_train = plant_energy[target_col]
-    X_test = plant_real[feature_cols]
-    y_test = plant_real[target_col]
-
-    X_train = pd.concat([X_train, pd.get_dummies(plant_energy['fuel_type'], prefix='fuel')], axis=1)
-    X_test = pd.concat([X_test, pd.get_dummies(plant_real['fuel_type'], prefix='fuel')], axis=1)
-    X_test = X_test.reindex(columns=X_train.columns, fill_value=0)
-
+@st.cache_resource
+def train_xgboost(X_train, y_train):
     xgb = XGBRegressor(
         n_estimators=200,
         learning_rate=0.05,
@@ -109,33 +112,52 @@ with tabs[1]:
         random_state=42
     )
     xgb.fit(X_train, y_train)
+    return xgb
 
-    y_pred = xgb.predict(X_test)
+with tabs[1]:
+    st.subheader("⚙️ Plant Energy Prediction")
+
+    feature_cols = ['production_tons', 'kiln_temperature', 'humidity_pct', 'maintenance']
+    target_col = 'energy_mwh'
+
+    X_train = plant_energy[feature_cols]
+    y_train = plant_energy[target_col]
+    X_test = plant_real[feature_cols]
+    y_test = plant_real[target_col]
+
+    # Codificación de variable categórica
+    X_train = pd.concat([X_train, pd.get_dummies(plant_energy['fuel_type'], prefix='fuel')], axis=1)
+    X_test = pd.concat([X_test, pd.get_dummies(plant_real['fuel_type'], prefix='fuel')], axis=1)
+    X_test = X_test.reindex(columns=X_train.columns, fill_value=0)
+
+    model_xgb = train_xgboost(X_train, y_train)
+    y_pred = model_xgb.predict(X_test)
+
     mae = mean_absolute_error(y_test, y_pred)
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))
     r2 = r2_score(y_test, y_pred)
 
     st.markdown(f"**MAE:** {mae:.2f} | **RMSE:** {rmse:.2f} | **R²:** {r2:.3f}")
 
-    fig, ax = plt.subplots(figsize=(6,6))
+    fig, ax = plt.subplots(figsize=(6, 6))
     sns.scatterplot(x=y_test, y=y_pred, alpha=0.6, ax=ax)
     ax.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--')
     ax.set_xlabel("Real Energy (MWh)")
     ax.set_ylabel("Predicted Energy (MWh)")
     ax.set_title("XGBoost: Real vs Predicted Energy")
     st.pyplot(fig)
+
+    # Imagen interpretativa
     image = Image.open("data/image2.png")
-    st.image(image, use_column_width=True)
+    st.image(image, caption="Correlación entre predicciones y valores reales", use_column_width=True)
 
 # ============================================================
-# 3️⃣ Autoencoder - Sensor Anomaly Detection
+# 3️⃣ AUTOENCODER — SENSOR ANOMALY DETECTION
 # ============================================================
-
-
 with tabs[2]:
     st.subheader("🧠 Sensor Anomaly Detection")
 
-    sensor_features = ['sensor_temp','sensor_vibration','sensor_pressure','sensor_co2','sensor_humidity','output_efficiency']
+    sensor_features = ['sensor_temp', 'sensor_vibration', 'sensor_pressure', 'sensor_co2', 'sensor_humidity', 'output_efficiency']
 
     scaler = StandardScaler()
     X_train = scaler.fit_transform(plant_sensors[sensor_features])
@@ -154,6 +176,7 @@ with tabs[2]:
     reconstructions = autoencoder.predict(X_test)
     mse = np.mean(np.power(X_test - reconstructions, 2), axis=1)
 
+    # Calcular umbral y clasificar anomalías
     train_recon = np.mean(np.power(X_train - autoencoder.predict(X_train), 2), axis=1)
     threshold = np.percentile(train_recon, 95)
 
@@ -162,15 +185,16 @@ with tabs[2]:
 
     cm = confusion_matrix(plant_sensors_real['anomaly'], plant_sensors_real['pred_anomaly'])
 
-    fig, ax = plt.subplots(figsize=(4,4))
+    fig, ax = plt.subplots(figsize=(4, 4))
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
     ax.set_title("Confusion Matrix - Autoencoder")
     st.pyplot(fig)
-    # --- Interpretación automática de la matriz de confusión ---
-    image = Image.open("data/image.png")
-    st.image(image, caption="Tabla explicativa de la Logica", use_column_width=True)
-    tn, fp, fn, tp = cm.ravel()
 
+    # Imagen explicativa
+    image = Image.open("data/image.png")
+    st.image(image, caption="Lógica del modelo Autoencoder", use_column_width=True)
+
+    tn, fp, fn, tp = cm.ravel()
     total = tn + fp + fn + tp
     accuracy = (tp + tn) / total
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0
@@ -192,9 +216,7 @@ with tabs[2]:
     Un bajo número de falsos negativos indica buena sensibilidad para detectar fallas, mientras que un bajo número de falsos positivos refleja que el modelo no está sobredetectando eventos normales como anómalos.
     """)
 
-
-
-    fig2, ax2 = plt.subplots(figsize=(8,4))
+    fig2, ax2 = plt.subplots(figsize=(8, 4))
     sns.histplot(plant_sensors_real, x='reconstruction_error', hue='anomaly', bins=40, kde=True, ax=ax2)
     ax2.set_title("Reconstruction Error Distribution")
     st.pyplot(fig2)
