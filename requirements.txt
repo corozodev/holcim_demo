@@ -9,3 +9,7 @@ prophet==1.1.5
 plotly==6.3.0
 joblib==1.4.2
 seaborn==0.13.2
+xgboost==3.0.1
+
+
+
