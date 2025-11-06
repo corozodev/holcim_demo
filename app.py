@@ -24,8 +24,7 @@ if not hasattr(np, 'bool_'):
 warnings.filterwarnings("ignore")
 plt.style.use('seaborn-v0_8')
 sns.set_palette("Set2")
-st.set_page_config(page_title="Industrial Forecasting", page_icon="📊", layout="wide")
-
+st.set_page_config(page_title="Holcim BI Predictive Demo", layout="wide")
 # ============================================================
 # 📥 Load data
 # ============================================================
@@ -45,7 +44,7 @@ cement_demand, cement_real, plant_energy, plant_real, plant_sensors, plant_senso
 # ============================================================
 # 🧱 Streamlit layout
 # ============================================================
-st.set_page_config(page_title="Holcim BI Predictive Demo", layout="wide")
+
 st.title("🏗️ Holcim BI Predictive Models Showcase")
 st.markdown("Demostración de tres modelos de predicción y análisis industrial usando datos sintéticos representativos de operaciones cementeras.")
 
