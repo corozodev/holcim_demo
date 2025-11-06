@@ -125,7 +125,7 @@ with tabs[1]:
     ax.set_title("XGBoost: Real vs Predicted Energy")
     st.pyplot(fig)
     image = Image.open("data/image2.png")
-    st.image(image, use_container_width=True)
+    st.image(image, use_column_width=True)
 
 # ============================================================
 # 3️⃣ Autoencoder - Sensor Anomaly Detection
@@ -168,7 +168,7 @@ with tabs[2]:
     st.pyplot(fig)
     # --- Interpretación automática de la matriz de confusión ---
     image = Image.open("data/image.png")
-    st.image(image, caption="Tabla explicativa de la Logica", use_container_width=True)
+    st.image(image, caption="Tabla explicativa de la Logica", use_column_width=True)
     tn, fp, fn, tp = cm.ravel()
 
     total = tn + fp + fn + tp
