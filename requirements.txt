@@ -8,3 +8,4 @@ keras==3.11.2
 prophet==1.1.5
 plotly==6.3.0
 joblib==1.4.2
+seaborn==0.13.2
